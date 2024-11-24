@@ -5,12 +5,12 @@ import {
   CardContent,
   CardHeader,
   TextField,
-  Tooltip,
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import Vertex from "./Components/Vertex";
 import { graphHelper } from "./grafHelper";
 import { useDijkstra } from "./useDijkstra";
+import { useAStar } from "./useAStar";
 
 export type Graph = { [key: string]: { [key: string]: number } };
 
@@ -19,17 +19,24 @@ export default function App() {
   const [graphData, setGraphData] = useState<{
     graph: Graph;
     nodePositions: { [key: string]: { x: number; y: number } };
-    gridSize: number;
+    gridSize: { rows: number; columns: number };
   } | null>(null);
   const [start, setStart] = useState<string>("");
   const [exits, setExits] = useState<string[]>([]);
   const [showPath, setShowPath] = useState(true);
   const [path, setPath] = useState<string[]>([]);
 
-  const { path: dijkstraPath, executionTime } = useDijkstra(
+  const { path: dijkstraPath, executionTime: dijkstraTime } = useDijkstra(
     graphData ? graphData.graph : {},
     start,
     exits
+  );
+
+  const { path: aStarPath, executionTime: aStarTime } = useAStar(
+    graphData ? graphData.graph : {},
+    start,
+    exits,
+    graphData?.nodePositions ? graphData.nodePositions : {}
   );
 
   useEffect(() => {
@@ -44,7 +51,7 @@ export default function App() {
 
   if (!graphData) return <div>Loading...</div>;
 
-  const { graph, nodePositions, gridSize } = graphData;
+  const { graph, nodePositions } = graphData;
 
   const getNodeBackgroundColor = (vertex: string) => {
     if (vertex === start) return "blue";
@@ -80,6 +87,8 @@ export default function App() {
   const handleResetPath = () => {
     setShowPath(false);
   };
+
+  const cellSize = 80;
 
   return (
     <div
@@ -126,9 +135,10 @@ export default function App() {
           <div
             style={{
               position: "relative",
-              width: `${gridSize * 100}px`,
-              height: `${gridSize * 100}px`,
+              width: `${10 * cellSize}px`, 
+              height: `${graphData.gridSize.rows * cellSize}px`, 
               margin: "0 auto",
+              overflow: "auto", 
             }}
           >
             {Object.keys(graph).map((vertex) => {
@@ -138,16 +148,16 @@ export default function App() {
                   key={vertex}
                   style={{
                     position: "absolute",
-                    width: "80px",
-                    height: "80px",
+                    width: `${cellSize - 10}px`, 
+                    height: `${cellSize - 10}px`,
                     border: "2px solid black",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     color: "white",
                     fontWeight: "bold",
-                    left: `${x * 100}px`,
-                    top: `${y * 100}px`,
+                    left: `${x * cellSize}px`,
+                    top: `${y * cellSize}px`,
                     backgroundColor: getNodeBackgroundColor(vertex),
                   }}
                 >
@@ -162,19 +172,19 @@ export default function App() {
                 const { x: x2, y: y2 } = nodePositions[neighbor];
                 const weight = graph[vertex][neighbor];
                 if (vertex < neighbor) {
-                  const xOffset = 40;
-                  const yOffset = 40;
-                  const xStart = x1 * 100 + xOffset;
-                  const yStart = y1 * 100 + yOffset;
-                  const xEnd = x2 * 100 + xOffset;
-                  const yEnd = y2 * 100 + yOffset;
+                  const xOffset = cellSize / 2;
+                  const yOffset = cellSize / 2;
+                  const xStart = x1 * cellSize + xOffset;
+                  const yStart = y1 * cellSize + yOffset;
+                  const xEnd = x2 * cellSize + xOffset;
+                  const yEnd = y2 * cellSize + yOffset;
                   return (
                     <>
                       <svg
                         key={`${vertex}-${neighbor}`}
                         style={{ position: "absolute", left: 0, top: 0 }}
-                        width={gridSize * 100}
-                        height={gridSize * 100}
+                        width={10 * cellSize}
+                        height={graphData.gridSize.rows * cellSize}
                       >
                         <line
                           x1={xStart}
@@ -226,13 +236,16 @@ export default function App() {
               >
                 Dijkstra
               </Button>
-              <Tooltip title="Todavía no está :/">
-                <span>
-                  <Button color="success" variant="contained" disabled>
-                    A*
-                  </Button>
-                </span>
-              </Tooltip>
+              <Button
+                color="success"
+                variant="contained"
+                onClick={() => {
+                  setPath(aStarPath);
+                  setShowPath(true); 
+                }}
+              >
+                A*
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -249,9 +262,11 @@ export default function App() {
           borderRadius: "10px",
         }}
       >
-        <h3 style={{ color: "black" }}>Tiempo de Ejecución:</h3>
-        <p style={{ color: "black" }}>{`Dijkstra: ${executionTime} ms`}</p>
-        <p style={{ color: "black" }}>{`A*: 🤌`}</p>
+        <Box>
+          <h3 style={{ color: "black" }}>Tiempo de Ejecución:</h3>
+          <p style={{ color: "black" }}>{`Dijkstra: ${dijkstraTime} ms`}</p>
+          <p style={{ color: "black" }}>{`A*: ${aStarTime} ms`}</p>
+        </Box>
       </Box>
     </div>
   );

@@ -80,7 +80,7 @@ export function useDijkstra(graph: Graph, start: string, exits: string[]) {
           previous[neighbor] = currentNode;
           minHeapPush(queue, [distance, neighbor]);
         }
-      }
+      } 
     }
     setExecutionTime(performance.now() - startTime);
   }, [graph, start, exits]);
