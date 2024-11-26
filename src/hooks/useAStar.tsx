@@ -1,4 +1,5 @@
 import { Graph } from "../App";
+import { timeoutTime } from "../constants";
 
 export function useAStar(
   graph: Graph,
@@ -26,7 +27,9 @@ export function useAStar(
     }
 
     gScore[start] = 0;
-    fScore[start] = 0;
+    const heuristicStart = Math.abs(nodePositions[start].x - nodePositions[exits[0]].x) +
+                           Math.abs(nodePositions[start].y - nodePositions[exits[0]].y);
+    fScore[start] = heuristicStart;
 
     const processNextNode = () => {
       if (openSet.size === 0) {
@@ -58,6 +61,17 @@ export function useAStar(
       openSet.delete(current);
       visited.add(current);
 
+      const path: string[] = [];
+      let tempNode: string | null = current;
+      while (tempNode) {
+        path.unshift(tempNode);
+        tempNode = cameFrom[tempNode];
+      }
+
+      const currentTime = performance.now();
+      const executionTime = currentTime - startTime;
+
+      updateCallback(path, new Set(visited), executionTime);
 
       for (const neighbor in graph[current]) {
         const tentativeGScore = gScore[current] + graph[current][neighbor];
@@ -78,9 +92,7 @@ export function useAStar(
         }
       }
 
-      updateCallback([], visited, 0);
-
-      setTimeout(processNextNode, 50);
+      setTimeout(processNextNode, timeoutTime); 
     };
 
     processNextNode();

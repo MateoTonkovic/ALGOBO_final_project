@@ -1,4 +1,5 @@
 import { Graph } from "../App";
+import { timeoutTime } from "../constants";
 
 export function useDijkstra(
   graph: Graph,
@@ -38,13 +39,12 @@ export function useDijkstra(
       const [currentDistance, currentNode] = queue.shift()!;
 
       if (visited.has(currentNode)) {
-        setTimeout(processNextNode, 50);
+        setTimeout(processNextNode, timeoutTime);
         return;
       }
 
       visited.add(currentNode);
 
-      
       if (exits.includes(currentNode)) {
         endTime = performance.now();
         const executionTime = endTime - startTime;
@@ -56,7 +56,7 @@ export function useDijkstra(
           node = previous[node];
         }
 
-        updateCallback(path, visited, executionTime);
+        updateCallback(path, new Set(visited), executionTime);
         return;
       }
 
@@ -71,12 +71,22 @@ export function useDijkstra(
         }
       }
 
-      updateCallback([], visited, 0);
+      const path: string[] = [];
+      let node: string | null = currentNode;
+      while (node) {
+        path.unshift(node);
+        node = previous[node];
+      }
 
-      setTimeout(processNextNode, 50);
+      const currentTime = performance.now();
+      const executionTime = currentTime - startTime;
+
+      updateCallback(path, new Set(visited), executionTime);
+
+      setTimeout(processNextNode, timeoutTime);
     };
 
-    startTime = performance.now(); 
+    startTime = performance.now();
     processNextNode();
   };
 

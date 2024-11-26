@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { Graph } from "../App";
+import { timeoutTime } from "../constants";
 
 export function useAStarWithEikonal(
   graph: Graph,
@@ -147,7 +148,7 @@ export function useAStarWithEikonal(
 
       updateCallback(path, new Set(visited), executionTime, fireTimes);
 
-      setTimeout(processNextNode, 50);
+      setTimeout(processNextNode, timeoutTime);
     };
 
     processNextNode();

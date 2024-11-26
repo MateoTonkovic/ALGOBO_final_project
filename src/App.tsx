@@ -129,10 +129,13 @@ export default function App() {
           ...Object.values(fireTimes).filter((t) => t < Infinity)
         );
         const normalizedFireTime = fireTimes[vertex] / maxFireTime;
-        const alpha = Math.pow(1 - normalizedFireTime, 2);
+
+        const rawAlpha = Math.pow(1 - normalizedFireTime, 2);
+        const alpha = Math.max(rawAlpha, 0.2);
+
         return `rgba(255, 69, 0, ${alpha})`;
       }
-      return "gray";
+      ("gray");
     },
     [start, exits, path, visitedNodes, fireSources, fireTimes]
   );
@@ -351,12 +354,34 @@ export default function App() {
               Resetear
             </Button>
             <div style={{ display: "flex", gap: "1rem" }}>
-              <Button onClick={() => setAlgorithm("Dijkstra")}>Dijkstra</Button>
-              <Button onClick={() => setAlgorithm("A*")}>A*</Button>
-              <Button onClick={() => setAlgorithm("Dijkstra with Eikonal")}>
+              <Button
+                variant={algorithm === "Dijkstra" ? "contained" : "outlined"}
+                onClick={() => setAlgorithm("Dijkstra")}
+              >
+                Dijkstra
+              </Button>
+              <Button
+                variant={algorithm === "A*" ? "contained" : "outlined"}
+                onClick={() => setAlgorithm("A*")}
+              >
+                A*
+              </Button>
+              <Button
+                variant={
+                  algorithm === "Dijkstra with Eikonal"
+                    ? "contained"
+                    : "outlined"
+                }
+                onClick={() => setAlgorithm("Dijkstra with Eikonal")}
+              >
                 Dijkstra + Fuego
               </Button>
-              <Button onClick={() => setAlgorithm("A* with Eikonal")}>
+              <Button
+                variant={
+                  algorithm === "A* with Eikonal" ? "contained" : "outlined"
+                }
+                onClick={() => setAlgorithm("A* with Eikonal")}
+              >
                 A* + Fuego
               </Button>
             </div>

@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { Graph } from "../App";
+import { timeoutTime } from "../constants";
 
 export function useDijkstraWithEikonal(
   graph: Graph,
@@ -58,7 +59,7 @@ export function useDijkstraWithEikonal(
       }
     };
 
-    updateFireTimes(); 
+    updateFireTimes();
 
     const processNextNode = () => {
       if (queue.length === 0) {
@@ -72,7 +73,7 @@ export function useDijkstraWithEikonal(
       const [currentDistance, currentNode] = queue.shift()!;
 
       if (visited.has(currentNode)) {
-        setTimeout(processNextNode, 0);
+        setTimeout(processNextNode, timeoutTime);
         return;
       }
       visited.add(currentNode);
@@ -117,7 +118,7 @@ export function useDijkstraWithEikonal(
 
       updateCallback(path, new Set(visited), executionTime, fireTimes);
 
-      setTimeout(processNextNode, 50);
+      setTimeout(processNextNode, timeoutTime);
     };
 
     processNextNode();

@@ -1,4 +1,5 @@
 import { Graph } from "./App";
+import { timeoutTime } from "./constants";
 
 export default function calculateFireTimes(
   graph: Graph,
@@ -30,7 +31,7 @@ export default function calculateFireTimes(
       const [currentFireTime, currentNode, currentDepth] = queue.shift()!;
 
       if (currentDepth >= maxDepth) {
-        setTimeout(processNextNode, 50);
+        setTimeout(processNextNode, timeoutTime);
         return;
       }
 
@@ -47,7 +48,7 @@ export default function calculateFireTimes(
         }
       }
 
-      setTimeout(processNextNode, 50);
+      setTimeout(processNextNode, timeoutTime);
     };
 
     processNextNode();
