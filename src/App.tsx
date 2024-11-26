@@ -6,11 +6,14 @@ import {
   CardHeader,
   TextField,
 } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import Vertex from "./Components/Vertex";
 import { graphHelper } from "./grafHelper";
-import { useDijkstra } from "./useDijkstra";
-import { useAStar } from "./useAStar";
+import { useDijkstra } from "./hooks/useDijkstra";
+import { useAStar } from "./hooks/useAStar";
+import { useDijkstraWithEikonal } from "./hooks/useDijkstraWithEikonal";
+import { useAStarWithEikonal } from "./hooks/useAStarWithEikonal";
+import calculateFireTimes from "./Eikonal.helper";
 
 export type Graph = { [key: string]: { [key: string]: number } };
 
@@ -23,42 +26,116 @@ export default function App() {
   } | null>(null);
   const [start, setStart] = useState<string>("");
   const [exits, setExits] = useState<string[]>([]);
-  const [showPath, setShowPath] = useState(true);
+  const [algorithm, setAlgorithm] = useState("Dijkstra");
+  const [fireTimes, setFireTimes] = useState<{ [key: string]: number }>({});
+  const [fireSources, setFireSources] = useState<string[]>([]);
   const [path, setPath] = useState<string[]>([]);
+  const [visitedNodes, setVisitedNodes] = useState<Set<string>>(new Set());
+  const isCalculating = useRef(false);
 
-  const { path: dijkstraPath, executionTime: dijkstraTime } = useDijkstra(
-    graphData ? graphData.graph : {},
-    start,
-    exits
-  );
+  const [executionTime, setExecutionTime] = useState<number>(0);
 
-  const { path: aStarPath, executionTime: aStarTime } = useAStar(
-    graphData ? graphData.graph : {},
+  const velocityFunction = useCallback((node: string) => 0.0001, []);
+
+  const handlePathUpdate = (
+    currentPath: string[],
+    visited: Set<string>,
+    newExecutionTime: number,
+    newFireTimes?: { [key: string]: number }
+  ) => {
+    setPath(currentPath);
+    setVisitedNodes(visited);
+    setExecutionTime(newExecutionTime || 0);
+    if (newFireTimes) setFireTimes(newFireTimes);
+  };
+
+  const { calculate: calculateDijkstra } = useDijkstra(
+    graphData?.graph!,
     start,
     exits,
-    graphData?.nodePositions ? graphData.nodePositions : {}
+    handlePathUpdate
+  );
+  const { calculate: calculateAStar } = useAStar(
+    graphData?.graph!,
+    start,
+    exits,
+    graphData?.nodePositions!,
+    handlePathUpdate
+  );
+  const { calculate: calculateDijkstraWithEikonal } = useDijkstraWithEikonal(
+    graphData?.graph!,
+    start,
+    exits,
+    velocityFunction,
+    fireSources,
+    handlePathUpdate
+  );
+  const { calculate: calculateAStarWithEikonal } = useAStarWithEikonal(
+    graphData?.graph!,
+    start,
+    exits,
+    velocityFunction,
+    fireSources,
+    graphData?.nodePositions!,
+    handlePathUpdate,
+    isCalculating
   );
 
   useEffect(() => {
-    const { graph, nodePositions, gridSize } =
-      graphHelper.generateBuildingGraph(apexsAmounts);
-    setGraphData({ graph, nodePositions, gridSize });
+    if (!graphData?.graph) return;
 
-    const vertices = Object.keys(graph);
-    setStart(vertices[0]);
-    setExits([vertices[vertices.length - 1]]);
-  }, [apexsAmounts]);
+    if (
+      algorithm === "Dijkstra with Eikonal" &&
+      Object.keys(fireTimes).length === 0
+    ) {
+      return;
+    }
 
-  if (!graphData) return <div>Loading...</div>;
+    switch (algorithm) {
+      case "Dijkstra":
+        calculateDijkstra();
+        break;
+      case "A*":
+        calculateAStar();
+        break;
+      case "Dijkstra with Eikonal":
+        calculateDijkstraWithEikonal();
+        break;
+      case "A* with Eikonal":
+        calculateAStarWithEikonal();
+        break;
+      default:
+        break;
+    }
+  }, [
+    algorithm,
+    graphData?.graph,
+    start,
+    exits,
+    fireSources,
+    graphData?.nodePositions,
+    velocityFunction,
+  ]);
 
-  const { graph, nodePositions } = graphData;
-
-  const getNodeBackgroundColor = (vertex: string) => {
-    if (vertex === start) return "blue";
-    if (exits.includes(vertex)) return "green";
-    if (showPath && path.includes(vertex)) return "yellow";
-    return "gray";
-  };
+  const getNodeBackgroundColor = useCallback(
+    (vertex: string) => {
+      if (vertex === start) return "blue";
+      if (exits.includes(vertex)) return "green";
+      if (path.includes(vertex)) return "purple";
+      if (visitedNodes.has(vertex)) return "yellow";
+      if (fireSources.length > 0 && fireTimes[vertex] === 0) return "red";
+      if (fireSources.length > 0 && fireTimes[vertex] < Infinity) {
+        const maxFireTime = Math.max(
+          ...Object.values(fireTimes).filter((t) => t < Infinity)
+        );
+        const normalizedFireTime = fireTimes[vertex] / maxFireTime;
+        const alpha = Math.pow(1 - normalizedFireTime, 2);
+        return `rgba(255, 69, 0, ${alpha})`;
+      }
+      return "gray";
+    },
+    [start, exits, path, visitedNodes, fireSources, fireTimes]
+  );
 
   const handleStartChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setStart(event.target.value);
@@ -79,16 +156,53 @@ export default function App() {
     setApexesAmount(numApexs);
   };
 
-  const handleShowPath = () => {
-    setPath(dijkstraPath);
-    setShowPath(true);
+  const handleFireSourcesChange = (input: string) => {
+    if (input.trim() === "") {
+      setFireSources([]);
+    } else {
+      const sources = input.split(",").map((source) => source.trim());
+      setFireSources(sources);
+    }
   };
 
-  const handleResetPath = () => {
-    setShowPath(false);
-  };
+  useEffect(() => {
+    const { graph, nodePositions, gridSize } =
+      graphHelper.generateBuildingGraph(apexsAmounts);
+    setGraphData({ graph, nodePositions, gridSize });
+
+    const vertices = Object.keys(graph);
+    setStart(vertices[0]);
+    setExits([vertices[vertices.length - 1]]);
+  }, [apexsAmounts]);
+
+  useEffect(() => {
+    if (!graphData || fireSources.length === 0) {
+      setFireTimes({});
+      return;
+    }
+
+    const computeFireTimes = async () => {
+      const fires = await calculateFireTimes(
+        graphData.graph,
+        fireSources,
+        velocityFunction
+      );
+      setFireTimes(fires);
+    };
+
+    computeFireTimes();
+  }, [graphData?.graph, fireSources, velocityFunction]);
 
   const cellSize = 80;
+
+  if (!graphData) return <div>Loading...</div>;
+
+  const handleResetPath = () => {
+    setStart("V0");
+    setExits(["V10"]);
+    setFireSources([]);
+    setExecutionTime(0);
+  };
 
   return (
     <div
@@ -130,25 +244,33 @@ export default function App() {
               onChange={handleChangeApexsAmount}
               fullWidth
             />
+            <TextField
+              label="Focos de Incendio (Separar por coma)"
+              placeholder="Ej: V0,V10"
+              onChange={(e) => handleFireSourcesChange(e.target.value)}
+              variant="outlined"
+              size="small"
+              fullWidth
+            />
           </div>
 
           <div
             style={{
               position: "relative",
-              width: `${10 * cellSize}px`, 
-              height: `${graphData.gridSize.rows * cellSize}px`, 
+              width: `${10 * cellSize}px`,
+              height: `${graphData.gridSize.rows * cellSize}px`,
               margin: "0 auto",
-              overflow: "auto", 
+              overflow: "auto",
             }}
           >
-            {Object.keys(graph).map((vertex) => {
-              const { x, y } = nodePositions[vertex];
+            {Object.keys(graphData.graph).map((vertex) => {
+              const { x, y } = graphData.nodePositions[vertex];
               return (
                 <div
                   key={vertex}
                   style={{
                     position: "absolute",
-                    width: `${cellSize - 10}px`, 
+                    width: `${cellSize - 10}px`,
                     height: `${cellSize - 10}px`,
                     border: "2px solid black",
                     display: "flex",
@@ -166,11 +288,11 @@ export default function App() {
               );
             })}
 
-            {Object.keys(graph).map((vertex) => {
-              const { x: x1, y: y1 } = nodePositions[vertex];
-              return Object.keys(graph[vertex]).map((neighbor) => {
-                const { x: x2, y: y2 } = nodePositions[neighbor];
-                const weight = graph[vertex][neighbor];
+            {Object.keys(graphData.graph).map((vertex) => {
+              const { x: x1, y: y1 } = graphData.nodePositions[vertex];
+              return Object.keys(graphData.graph[vertex]).map((neighbor) => {
+                const { x: x2, y: y2 } = graphData.nodePositions[neighbor];
+                const weight = graphData.graph[vertex][neighbor];
                 if (vertex < neighbor) {
                   const xOffset = cellSize / 2;
                   const yOffset = cellSize / 2;
@@ -229,22 +351,13 @@ export default function App() {
               Resetear
             </Button>
             <div style={{ display: "flex", gap: "1rem" }}>
-              <Button
-                color="success"
-                variant="contained"
-                onClick={handleShowPath}
-              >
-                Dijkstra
+              <Button onClick={() => setAlgorithm("Dijkstra")}>Dijkstra</Button>
+              <Button onClick={() => setAlgorithm("A*")}>A*</Button>
+              <Button onClick={() => setAlgorithm("Dijkstra with Eikonal")}>
+                Dijkstra + Fuego
               </Button>
-              <Button
-                color="success"
-                variant="contained"
-                onClick={() => {
-                  setPath(aStarPath);
-                  setShowPath(true); 
-                }}
-              >
-                A*
+              <Button onClick={() => setAlgorithm("A* with Eikonal")}>
+                A* + Fuego
               </Button>
             </div>
           </div>
@@ -264,8 +377,9 @@ export default function App() {
       >
         <Box>
           <h3 style={{ color: "black" }}>Tiempo de Ejecución:</h3>
-          <p style={{ color: "black" }}>{`Dijkstra: ${dijkstraTime} ms`}</p>
-          <p style={{ color: "black" }}>{`A*: ${aStarTime} ms`}</p>
+          <p style={{ color: "black" }}>{`${algorithm}: ${
+            executionTime || 0
+          } ms`}</p>
         </Box>
       </Box>
     </div>
